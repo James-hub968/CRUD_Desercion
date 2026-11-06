@@ -1,0 +1,23 @@
+
+{% extends "base.html" %}
+{% block contenido %}
+<h1>Estudiantes</h1>
+<a href="{{ url_for('crear') }}">+ Nuevo estudiante</a>
+<table border="1" cellpadding="6">
+  <tr><th>ID</th><th>Nombre</th><th>Zona</th><th>Estrato</th><th>Acciones</th></tr>
+  {% for e in estudiantes %}
+  <tr>
+    <td>{{ e.id_estudiante }}</td>
+    <td>{{ e.nombres }} {{ e.apellidos }}</td>
+    <td>{{ e.zona or '' }}</td>
+    <td>{{ e.estrato or '' }}</td>
+    <td>
+      <a href="{{ url_for('editar', id=e.id_estudiante) }}">Editar</a>
+      <form method="post" action="{{ url_for('eliminar', id=e.id_estudiante) }}" style="display:inline">
+        <button onclick="return confirm('¿Eliminar?')">Eliminar</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% endblock %}

@@ -1,0 +1,23 @@
+# --- Entornos Virtuales de Python ---
+
+venv/
+.venv/
+env/
+ENV/
+*.venv/
+
+# --- Caché de Python ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+
+# --- Archivos del sistema macOS ---
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# --- Configuraciones del Editor ---
+.vscode/

@@ -1,0 +1,8 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><title>Deserción escolar</title></head>
+<body>
+  {% for m in get_flashed_messages() %}<p><b>{{ m }}</b></p>{% endfor %}
+  {% block contenido %}{% endblock %}
+</body>
+</html>

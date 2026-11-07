@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block titulo %}Sin conexión{% endblock %}
+
+{% block contenido %}
+<section class="tarjeta vacio">
+  <p><strong>No hay conexión con la base de datos.</strong></p>
+  <p>Revise que MySQL esté encendido y que los datos del archivo <code>.env</code> sean correctos.</p>
+  <p class="tenue"><small>{{ detalle }}</small></p>
+  <a class="btn btn--primario" href="{{ request.url }}">Reintentar</a>
+</section>
+{% endblock %}

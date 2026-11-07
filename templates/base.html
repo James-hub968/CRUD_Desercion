@@ -1,8 +1,44 @@
+{% from "_ui.html" import icono with context %}
 <!doctype html>
 <html lang="es">
-<head><meta charset="utf-8"><title>Deserción escolar</title></head>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>{% block titulo %}{% endblock %} · Deserción escolar</title>
+  <script>document.documentElement.classList.add("js")</script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
+</head>
 <body>
-  {% for m in get_flashed_messages() %}<p><b>{{ m }}</b></p>{% endfor %}
-  {% block contenido %}{% endblock %}
+  <a class="saltar" href="#contenido">Saltar al contenido</a>
+
+  <header class="topbar">
+    <div class="topbar__in">
+      <a class="marca" href="{{ url_for('listar') }}">Deserción escolar</a>
+      <nav class="nav" aria-label="Secciones">
+        <a href="{{ url_for('listar') }}" {% if request.endpoint in ('listar', 'crear', 'editar') %}aria-current="page"{% endif %}>Estudiantes</a>
+        <a href="{{ url_for('ver_desercion') }}" {% if request.endpoint == 'ver_desercion' %}aria-current="page"{% endif %}>Deserción</a>
+        <a href="{{ url_for('api_docs') }}" {% if request.endpoint == 'api_docs' %}aria-current="page"{% endif %}>API</a>
+      </nav>
+      <div class="topbar__acciones">{% block acciones %}{% endblock %}</div>
+    </div>
+  </header>
+
+  <main id="contenido" class="contenedor">
+    {% block contenido %}{% endblock %}
+  </main>
+
+  {% with mensajes = get_flashed_messages(with_categories=true) %}
+  <div class="avisos" role="status" aria-live="polite">
+    {% for tipo, m in mensajes %}
+    <div class="aviso aviso--{{ tipo }}">
+      {{ icono('ok' if tipo == 'ok' else 'alerta') }}
+      <span>{{ m }}</span>
+      <button type="button" class="aviso__cerrar" aria-label="Cerrar aviso">{{ icono('cerrar') }}</button>
+    </div>
+    {% endfor %}
+  </div>
+  {% endwith %}
 </body>
 </html>

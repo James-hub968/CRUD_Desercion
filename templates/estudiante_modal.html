@@ -1,0 +1,9 @@
+{% from "_ui.html" import icono %}
+<header class="modal__cabecera">
+  <div>
+    <h2 id="modal-titulo">{{ 'Editar estudiante' if e else 'Nuevo estudiante' }}</h2>
+    {% if e %}<p class="sub">{{ e.nombres }} {{ e.apellidos }}</p>{% endif %}
+  </div>
+  <button type="button" class="btn btn--icono" aria-label="Cerrar" data-cerrar>{{ icono('cerrar') }}</button>
+</header>
+{% include "_estudiante_form.html" %}

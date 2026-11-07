@@ -1,23 +1,88 @@
-
 {% extends "base.html" %}
+{% from "_ui.html" import icono, estado, vacio, filtros, apiladas with context %}
+{% block titulo %}Estudiantes{% endblock %}
+
+{% block acciones %}
+<a class="btn btn--primario" href="{{ url_for('crear') }}" data-modal>{{ icono('mas') }}Nuevo estudiante</a>
+{% endblock %}
+
 {% block contenido %}
-<h1>Estudiantes</h1>
-<a href="{{ url_for('crear') }}">+ Nuevo estudiante</a>
-<table border="1" cellpadding="6">
-  <tr><th>ID</th><th>Nombre</th><th>Zona</th><th>Estrato</th><th>Acciones</th></tr>
-  {% for e in estudiantes %}
-  <tr>
-    <td>{{ e.id_estudiante }}</td>
-    <td>{{ e.nombres }} {{ e.apellidos }}</td>
-    <td>{{ e.zona or '' }}</td>
-    <td>{{ e.estrato or '' }}</td>
-    <td>
-      <a href="{{ url_for('editar', id=e.id_estudiante) }}">Editar</a>
-      <form method="post" action="{{ url_for('eliminar', id=e.id_estudiante) }}" style="display:inline">
-        <button onclick="return confirm('¿Eliminar?')">Eliminar</button>
-      </form>
-    </td>
-  </tr>
-  {% endfor %}
-</table>
+<div class="encabezado">
+  <p class="sub">
+    <strong class="cifra" data-contador>{{ filas|length }}</strong> {{ 'estudiante' if filas|length == 1 else 'estudiantes' }}
+    {% if zona %}· zona {{ zona|lower }}{% endif %}
+    {% if inst %}· {{ inst.nombre }}{% endif %}
+  </p>
+</div>
+
+{% call filtros('listar', zona, inst, instituciones) %}
+<div class="buscador">
+  {{ icono('buscar') }}
+  <label class="sr-only" for="buscar">Buscar estudiante</label>
+  <input id="buscar" class="control" type="search" placeholder="Buscar por nombre o institución" autocomplete="off">
+</div>
+{% endcall %}
+
+<section class="tarjeta">
+  {{ apiladas(resumen) }}
+</section>
+
+<section class="tarjeta tarjeta--tabla">
+  {% if filas %}
+  <table class="tabla">
+    <thead>
+      <tr>
+        <th scope="col">Estudiante</th>
+        <th scope="col">Institución</th>
+        <th scope="col">Grado</th>
+        <th scope="col">Zona</th>
+        <th scope="col" class="num">Estrato</th>
+        <th scope="col">Estado</th>
+        <th scope="col"><span class="sr-only">Acciones</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in filas %}
+      <tr data-fila="{{ f.nombre }} {{ f.institucion or '' }}" class="{{ loop.cycle('', 'alt') }}">
+        <td data-label="Estudiante"><a class="enlace-fila" href="{{ url_for('editar', id=f.id) }}" data-modal>{{ f.nombre }}</a></td>
+        <td data-label="Institución">{{ vacio(f.institucion) }}</td>
+        <td data-label="Grado">{{ vacio(f.grado) }}{% if f.jornada %} <span class="tenue">· {{ f.jornada }}</span>{% endif %}</td>
+        <td data-label="Zona">{{ vacio(f.zona) }}</td>
+        <td data-label="Estrato" class="num">{{ vacio(f.estrato) }}</td>
+        <td data-label="Estado">{{ estado(f.estado) }}</td>
+        <td class="acciones">
+          <a class="btn btn--icono" href="{{ url_for('editar', id=f.id) }}" aria-label="Editar a {{ f.nombre }}" data-tip="Editar" data-modal>{{ icono('editar') }}</a>
+          <form class="form-eliminar" method="post" action="{{ url_for('eliminar', id=f.id) }}" data-nombre="{{ f.nombre }}">
+            <button class="btn btn--icono btn--peligro" aria-label="Eliminar a {{ f.nombre }}" data-tip="Eliminar">{{ icono('eliminar') }}</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="vacio" data-vacio-busqueda hidden>Ningún estudiante coincide con «<q></q>».</p>
+  {% else %}
+  <div class="vacio">
+    <p><strong>No hay estudiantes{% if zona or inst %} con estos filtros{% endif %}.</strong></p>
+    {% if zona or inst %}
+    <a class="btn btn--fantasma" href="{{ url_for('listar') }}">Quitar filtros</a>
+    {% else %}
+    <a class="btn btn--primario" href="{{ url_for('crear') }}">Registrar el primero</a>
+    {% endif %}
+  </div>
+  {% endif %}
+</section>
+
+<dialog class="modal" aria-labelledby="modal-titulo"><div data-modal-cuerpo></div></dialog>
+
+<dialog class="confirmar" aria-labelledby="confirmar-titulo">
+  <div class="confirmar__in">
+    <h2 id="confirmar-titulo">¿Eliminar estudiante?</h2>
+    <p>Se eliminará a <strong data-nombre></strong>. Esta acción no se puede deshacer.</p>
+    <div class="confirmar__botones">
+      <button type="button" class="btn btn--fantasma" data-cancelar>Cancelar</button>
+      <button type="button" class="btn btn--peligro-lleno" data-confirmar>Eliminar</button>
+    </div>
+  </div>
+</dialog>
 {% endblock %}

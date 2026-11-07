@@ -1,0 +1,102 @@
+{% macro icono(nombre) -%}
+<svg class="icono" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+  {%- if nombre == 'ok' %}<circle cx="8" cy="8" r="6.25"/><path d="m5.25 8.25 1.9 1.9 3.6-3.9"/>
+  {%- elif nombre == 'alerta' %}<circle cx="8" cy="8" r="6.25"/><path d="M8 4.75v3.75"/><path d="M8 11.1v.15"/>
+  {%- elif nombre == 'cerrar' %}<path d="m4.5 4.5 7 7m0-7-7 7"/>
+  {%- elif nombre == 'buscar' %}<circle cx="7" cy="7" r="4.25"/><path d="m10.25 10.25 3 3"/>
+  {%- elif nombre == 'descargar' %}<path d="M8 2.75v7.5m-3-3 3 3 3-3M3 12.75h10"/>
+  {%- elif nombre == 'imprimir' %}<path d="M4.75 6V2.75h6.5V6M4.75 11.25H3.25v-5h9.5v5h-1.5"/><path d="M4.75 9.25h6.5v4h-6.5z"/>
+  {%- elif nombre == 'mas' %}<path d="M8 3.5v9M3.5 8h9"/>
+  {%- elif nombre == 'editar' %}<path d="M10.25 3.25 12.75 5.75 6 12.5H3.5V10z"/><path d="m9 4.5 2.5 2.5"/>
+  {%- elif nombre == 'eliminar' %}<path d="M2.75 4.25h10.5M6.25 4.25V2.75h3.5v1.5M4.25 4.25l.6 9h6.3l.6-9"/><path d="M6.75 6.75v4M9.25 6.75v4"/>
+  {%- elif nombre == 'copiar' %}<rect x="5.25" y="5.25" width="8" height="8" rx="1.5"/><path d="M10.75 5.25v-1A1.5 1.5 0 0 0 9.25 2.75h-5a1.5 1.5 0 0 0-1.5 1.5v5a1.5 1.5 0 0 0 1.5 1.5h1"/>
+  {%- elif nombre == 'ejecutar' %}<path d="M5.25 3.6v8.8a.6.6 0 0 0 .9.5l6.9-4.4a.6.6 0 0 0 0-1L6.15 3.1a.6.6 0 0 0-.9.5z"/>
+  {%- endif %}
+</svg>
+{%- endmacro %}
+
+{% macro estado(e) -%}
+<span class="estado estado--{{ (e or 'ninguno')|lower }}"><i aria-hidden="true"></i>{{ ESTADO_TEXTO[e] }}</span>
+{%- endmacro %}
+
+{% macro vacio(valor) -%}
+{% if valor is none or valor == '' %}<span class="tenue">—</span>{% else %}{{ valor }}{% endif %}
+{%- endmacro %}
+
+{% macro filtros(endpoint, zona, inst, instituciones) %}
+<form class="filtros" method="get" action="{{ url_for(endpoint) }}">
+  <nav class="segmentos" aria-label="Zona">
+    <a href="{{ url_for(endpoint, institucion=inst.id_institucion if inst else none) }}" {% if not zona %}aria-current="true"{% endif %}>Todas</a>
+    {% for z in ZONAS %}
+    <a href="{{ url_for(endpoint, zona=z, institucion=inst.id_institucion if inst else none) }}" {% if zona == z %}aria-current="true"{% endif %}>{{ z }}</a>
+    {% endfor %}
+  </nav>
+  {% if zona %}<input type="hidden" name="zona" value="{{ zona }}">{% endif %}
+  <label class="sr-only" for="f-inst">Institución</label>
+  <select id="f-inst" name="institucion" class="control" data-autoenvio>
+    <option value="">Todas las instituciones</option>
+    {% for i in instituciones %}
+    <option value="{{ i.id_institucion }}" {% if inst and inst.id_institucion == i.id_institucion %}selected{% endif %}>{{ i.nombre }}</option>
+    {% endfor %}
+  </select>
+  <noscript><button class="btn btn--fantasma">Filtrar</button></noscript>
+  {% if caller %}{{ caller() }}{% endif %}
+</form>
+{% endmacro %}
+
+{% macro barras(titulo, items) %}
+<figure class="grafico">
+  <figcaption>{{ titulo }}</figcaption>
+  {% if items %}
+  <ul class="barras">
+    {% for b in items %}
+    <li class="barra" tabindex="0" data-tip="{{ b.detalle }}">
+      <span class="barra__nombre">{{ b.nombre }}</span>
+      <span class="barra__pista"><span class="barra__relleno" style="--w: {{ '%.2f'|format(b.ancho) }}"></span></span>
+      <span class="barra__valor">{{ b.valor }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="tenue">Sin datos con estos filtros.</p>
+  {% endif %}
+</figure>
+{% endmacro %}
+
+{% macro apiladas(resumen) %}
+<figure class="grafico">
+  <figcaption>Estado de la matrícula por zona</figcaption>
+  <ul class="leyenda" aria-hidden="true">
+    {% for s in ESTADOS|list + [none] %}<li><i class="serie serie--{{ (s or 'ninguno')|lower }}"></i>{{ ESTADO_TEXTO[s] }}</li>{% endfor %}
+  </ul>
+  <ul class="barras barras--apiladas">
+    {% for z in resumen %}
+    <li class="barra">
+      <span class="barra__nombre">{{ z.zona }} <span class="tenue">· {{ z.total }}</span></span>
+      <span class="barra__pista">
+        {% for s in z.segmentos %}
+        <span class="segmento serie--{{ (s.estado or 'ninguno')|lower }}" style="--w: {{ '%.2f'|format(s.ancho) }}" tabindex="0"
+              data-tip="{{ z.zona }}: {{ s.n }} {{ ESTADO_TEXTO[s.estado]|lower }}"></span>
+        {% endfor %}
+      </span>
+      <span class="barra__valor barra__valor--detalle">
+        {% for s in z.segmentos %}{{ s.n }} {{ ESTADO_TEXTO[s.estado]|lower }}{{ ' · ' if not loop.last }}{% endfor %}
+        {% if not z.segmentos %}<span class="tenue">Sin estudiantes</span>{% endif %}
+      </span>
+    </li>
+    {% endfor %}
+  </ul>
+</figure>
+{% endmacro %}
+
+{% macro error(errores, campo) -%}
+{% if errores.get(campo) %}<p class="campo__error" id="err-{{ campo }}">{{ icono('alerta') }}{{ errores[campo] }}</p>{% endif %}
+{%- endmacro %}
+
+{% macro aria(campo) -%}
+{% if errores.get(campo) %}aria-invalid="true" aria-describedby="err-{{ campo }}"{% endif %}
+{%- endmacro %}
+
+{% macro opcion_seg(nombre, valor, texto, actual) -%}
+<label><input type="radio" name="{{ nombre }}" value="{{ valor }}" {% if (actual or '')|string == valor %}checked{% endif %}><span>{{ texto }}</span></label>
+{%- endmacro %}

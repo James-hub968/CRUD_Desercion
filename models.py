@@ -1,6 +1,5 @@
-from flask_sqlalchemy import SQLAlchemy
-
-db = SQLAlchemy()
+# models.py
+from extensions import db
 
 class Institucion(db.Model):
     __tablename__ = "institucion"
@@ -61,10 +60,12 @@ class Matricula(db.Model):
     id_grupo = db.Column(db.Integer, db.ForeignKey("grupo.id_grupo"), nullable=False)
     id_causa = db.Column(db.Integer, db.ForeignKey("causa_retiro.id_causa"))
     id_programa = db.Column(db.Integer, db.ForeignKey("programa_apoyo.id_programa"))
+    
     estudiante = db.relationship("Estudiante", back_populates="matriculas")
     grupo = db.relationship("Grupo", back_populates="matriculas")
     causa = db.relationship("CausaRetiro", back_populates="matriculas")
     programa = db.relationship("ProgramaApoyo", back_populates="matriculas")
+    
     # En la BD las notas se borran en cascada con la matrícula
     notas = db.relationship("Nota", back_populates="matricula",
                             cascade="all, delete-orphan", passive_deletes=True)
@@ -76,5 +77,6 @@ class Nota(db.Model):
     valor = db.Column(db.Numeric(5, 2))
     id_matricula = db.Column(db.Integer, db.ForeignKey("matricula.id_matricula"), nullable=False)
     id_asignatura = db.Column(db.Integer, db.ForeignKey("asignatura.id_asignatura"), nullable=False)
+    
     matricula = db.relationship("Matricula", back_populates="notas")
     asignatura = db.relationship("Asignatura", back_populates="notas")

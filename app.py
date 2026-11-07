@@ -1,6 +1,7 @@
 import csv
 import io
 import os
+import socket
 from datetime import date
 
 from flask import Flask, Response, flash, jsonify, redirect, render_template, request, url_for
@@ -926,5 +927,16 @@ def metodo_no_permitido(e):
     return e
 
 
+def puerto_libre(desde=5000):
+    # Primer puerto libre desde 5000; la página de la API muestra el que quede
+    for puerto in range(desde, desde + 100):
+        with socket.socket() as s:
+            if s.connect_ex(("127.0.0.1", puerto)) != 0:
+                return puerto
+    return 0
+
+
 if __name__ == "__main__":
-    app.run(debug=True)
+    # El proceso que recarga en modo debug hereda el mismo puerto
+    os.environ.setdefault("PUERTO", str(puerto_libre()))
+    app.run(debug=True, port=int(os.environ["PUERTO"]))

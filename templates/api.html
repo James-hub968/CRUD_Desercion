@@ -30,20 +30,10 @@
 {% endmacro %}
 
 {% block contenido %}
-<div class="encabezado">
-  <h1>API</h1>
+<div class="api-copia api-base">
+  <code data-base>{{ request.host_url.rstrip('/') }}</code>
+  <button type="button" class="btn btn--icono" aria-label="Copiar dirección base" data-tip="Copiar" data-copiar="{{ request.host_url.rstrip('/') }}">{{ icono('copiar') }}</button>
 </div>
-
-<section class="tarjeta api-base">
-  <div>
-    <h2>Dirección base</h2>
-    <p class="tenue">Cada consulta se arma con esta dirección más su ruta. Abre una, ajusta los datos y pulsa Ejecutar.</p>
-  </div>
-  <div class="api-copia">
-    <code data-base>{{ request.host_url.rstrip('/') }}</code>
-    <button type="button" class="btn btn--icono" aria-label="Copiar dirección base" data-tip="Copiar" data-copiar="{{ request.host_url.rstrip('/') }}">{{ icono('copiar') }}</button>
-  </div>
-</section>
 
 {% for grupo, puntos in grupos %}
 <section class="api-grupo" aria-labelledby="g-{{ loop.index }}">

@@ -303,9 +303,7 @@ select.control { padding-right: 2rem; appearance: none; background: var(--surfac
 /* ---------- API ----------
    Cada consulta se abre como acordeón (+/−) con su documentación y su panel para probarla. */
 code, pre { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: .86em; }
-.api-base { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; }
-.api-base h2 { margin: 0 0 .25rem; }
-.api-base p { margin: 0; max-width: 40rem; }
+.api-base { width: fit-content; max-width: 100%; }
 .api-copia { display: flex; align-items: center; gap: .5rem; min-width: 0; }
 .api-copia code { flex: 1 1 auto; min-width: 0; padding: .375rem .625rem; border-radius: var(--r-control); background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--linea); overflow-wrap: anywhere; }
 .api-grupo { display: grid; gap: .5rem; }

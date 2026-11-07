@@ -224,17 +224,33 @@ document.querySelectorAll("[data-imprimir]").forEach(b => b.addEventListener("cl
     if (tip) { boton.dataset.tip = "Copiado"; setTimeout(() => { boton.dataset.tip = tip; }, 1200); }
   };
   const kb = n => n < 1024 ? `${n} B` : `${(n / 1024).toFixed(1).replace(".", ",")} KB`;
+  const NOMBRE = { 200: "OK", 201: "Creado", 400: "Petición incorrecta", 404: "No existe", 405: "Método no permitido",
+    409: "Conflicto", 422: "Datos no válidos", 500: "Error del servidor", 503: "Sin base de datos" };
+  const etiqueta = o => o.grado ? `${o.grado} · ${o.institucion} · ${o.anio_lectivo}` : o.nombre || o.descripcion;
+
+  // Tras crear, cambiar o borrar, los desplegables de id de ese recurso se ponen al día.
+  const reflejar = (recurso, metodo, o) => {
+    document.querySelectorAll(`select[data-recurso="${recurso}"]`).forEach(s => {
+      const op = [...s.options].find(x => x.value === String(o.id));
+      if (metodo === "DELETE") op?.remove();
+      else if (op) op.textContent = `${o.id} · ${etiqueta(o)}`;
+      else s.insertBefore(new Option(`${o.id} · ${etiqueta(o)}`, o.id), s.lastElementChild);
+    });
+  };
 
   document.querySelectorAll("[data-copiar]").forEach(b => b.addEventListener("click", () => copiar(b.dataset.copiar, b)));
 
   formas.forEach(form => {
-    const ruta = form.dataset.api;
+    const { api: ruta, metodo, recurso } = form.dataset;
     const urlEl = form.querySelector("[data-url]");
+    const editor = form.querySelector("[data-cuerpo]");
     const salida = form.nextElementSibling;
     const json = salida.querySelector("[data-json]");
+    const codigo = salida.querySelector("[data-codigo]");
+    const medida = salida.querySelector("[data-medida]");
     const boton = form.querySelector("button[data-texto]");
     const texto = boton.innerHTML;
-    let ultimo = "";
+    let ultimo = "", armado = 0;
 
     const url = () => {
       let r = ruta;
@@ -245,37 +261,70 @@ document.querySelectorAll("[data-imprimir]").forEach(b => b.addEventListener("cl
       });
       return r + (q.size ? `?${q}` : "");
     };
-    const actualizar = () => { urlEl.textContent = url(); };
+    const actualizar = () => { urlEl.textContent = metodo === "GET" ? url() : `${metodo} ${url()}`; };
     form.addEventListener("change", actualizar);
     actualizar();
-    form.querySelector("[data-copiar-url]").addEventListener("click", ev => copiar(base + url(), ev.currentTarget));
+
+    const curl = () => {
+      let c = `curl -X ${metodo} "${base}${url()}"`;
+      if (editor) c += ` -H "Content-Type: application/json" -d '${editor.value.replace(/\s*\n\s*/g, " ").trim()}'`;
+      return c;
+    };
+    form.querySelector("[data-copiar-url]").addEventListener("click", ev =>
+      copiar(metodo === "GET" ? base + url() : curl(), ev.currentTarget));
     salida.querySelector("[data-copiar-json]").addEventListener("click", ev => copiar(ultimo, ev.currentTarget));
+
+    const mostrar = (estado, ok, detalle, cuerpo, pintado) => {
+      codigo.textContent = estado;
+      codigo.dataset.ok = ok;
+      medida.textContent = detalle;
+      ultimo = cuerpo;
+      json.innerHTML = pintado ? pintarJson(cuerpo) : esc(cuerpo);
+      salida.hidden = false;
+      salida.querySelector("pre").scrollTop = 0;
+    };
+
+    // Borrar pide un segundo clic en menos de 4 s.
+    const desarmar = () => { clearTimeout(armado); armado = 0; boton.innerHTML = texto; boton.dataset.armado = ""; };
 
     form.addEventListener("submit", async ev => {
       ev.preventDefault();
+      if (metodo === "DELETE" && !armado) {
+        boton.textContent = boton.dataset.armar;
+        boton.dataset.armado = "si";
+        armado = setTimeout(desarmar, 4000);
+        return;
+      }
+      if (armado) { clearTimeout(armado); armado = 0; boton.dataset.armado = ""; }
+
+      const pedido = { method: metodo, headers: { Accept: "application/json" } };
+      if (editor) {
+        try { JSON.parse(editor.value); } catch (e) {
+          mostrar("JSON no válido", false, "Revisa el cuerpo antes de enviarlo", e.message, false);
+          editor.focus();
+          return;
+        }
+        pedido.headers["Content-Type"] = "application/json";
+        pedido.body = editor.value;
+      }
+
       boton.disabled = true;
       boton.textContent = boton.dataset.texto;
       const inicio = performance.now();
-      let codigo = salida.querySelector("[data-codigo]"), medida = salida.querySelector("[data-medida]");
       try {
-        const r = await fetch(url(), { headers: { Accept: "application/json" } });
+        const r = await fetch(url(), pedido);
         const crudo = await r.text();
         const ms = Math.round(performance.now() - inicio);
         let datos;
-        try { datos = JSON.parse(crudo); ultimo = JSON.stringify(datos, null, 2); } catch { ultimo = crudo; }
-        codigo.textContent = `${r.status} ${r.ok ? "OK" : r.statusText || "Error"}`;
-        codigo.dataset.ok = r.ok;
+        try { datos = JSON.parse(crudo); } catch { datos = undefined; }
         const cuantos = Array.isArray(datos) ? ` · ${datos.length} ${datos.length === 1 ? "elemento" : "elementos"}` : "";
-        medida.textContent = `${ms} ms · ${kb(new Blob([crudo]).size)}${cuantos}`;
-        json.innerHTML = datos === undefined ? esc(ultimo) : pintarJson(ultimo);
+        mostrar(`${r.status} ${NOMBRE[r.status] || r.statusText}`, r.ok,
+          `${ms} ms · ${kb(new Blob([crudo]).size)}${cuantos}`,
+          datos === undefined ? crudo : JSON.stringify(datos, null, 2), datos !== undefined);
+        if (r.ok && recurso && metodo !== "GET") reflejar(recurso, metodo, metodo === "DELETE" ? datos.eliminado : datos);
       } catch {
-        codigo.textContent = "Sin respuesta";
-        codigo.dataset.ok = false;
-        medida.textContent = "No se pudo conectar con el servidor";
-        json.textContent = ultimo = "";
+        mostrar("Sin respuesta", false, "No se pudo conectar con el servidor", "", false);
       }
-      salida.hidden = false;
-      salida.querySelector("pre").scrollTop = 0;
       boton.disabled = false;
       boton.innerHTML = texto;
     });

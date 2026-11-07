@@ -496,12 +496,27 @@ def libro_excel(d, filas, alcance):
     return salida.getvalue()
 
 
-# ---------- API GET ----------
+# ---------- API: LECTURA ----------
+def json_institucion(i):
+    return {"id": i.id_institucion, "nombre": i.nombre, "tipo": i.tipo, "municipio": i.municipio, "zona": i.zona}
+
+
+def json_grupo(g):
+    return {"id": g.id_grupo, "grado": g.grado, "jornada": g.jornada, "anio_lectivo": g.anio_lectivo,
+            "id_institucion": g.id_institucion, "institucion": g.institucion.nombre}
+
+
+def json_causa(c):
+    return {"id": c.id_causa, "descripcion": c.descripcion}
+
+
+def json_programa(p):
+    return {"id": p.id_programa, "nombre": p.nombre, "tipo": p.tipo}
+
+
 @app.get("/api/instituciones")
 def api_instituciones():
-    return jsonify([{"id": i.id_institucion, "nombre": i.nombre, "tipo": i.tipo,
-                     "municipio": i.municipio, "zona": i.zona}
-                    for i in Institucion.query.order_by(Institucion.nombre)])
+    return jsonify([json_institucion(i) for i in Institucion.query.order_by(Institucion.nombre)])
 
 
 @app.get("/api/estudiantes")
@@ -536,80 +551,350 @@ def api_grupos():
     q = Grupo.query.options(selectinload(Grupo.institucion)).order_by(Grupo.anio_lectivo.desc(), Grupo.grado)
     if id_inst:
         q = q.filter(Grupo.id_institucion == id_inst)
-    return jsonify([{"id": g.id_grupo, "grado": g.grado, "jornada": g.jornada, "anio_lectivo": g.anio_lectivo,
-                     "id_institucion": g.id_institucion, "institucion": g.institucion.nombre} for g in q])
+    return jsonify([json_grupo(g) for g in q])
 
 
 @app.get("/api/causas")
 def api_causas():
-    return jsonify([{"id": c.id_causa, "descripcion": c.descripcion}
-                    for c in CausaRetiro.query.order_by(CausaRetiro.descripcion)])
+    return jsonify([json_causa(c) for c in CausaRetiro.query.order_by(CausaRetiro.descripcion)])
 
 
 @app.get("/api/programas")
 def api_programas():
-    return jsonify([{"id": p.id_programa, "nombre": p.nombre, "tipo": p.tipo}
-                    for p in ProgramaApoyo.query.order_by(ProgramaApoyo.nombre)])
+    return jsonify([json_programa(p) for p in ProgramaApoyo.query.order_by(ProgramaApoyo.nombre)])
+
+
+# ---------- API: ESCRITURA ----------
+# POST crea, PUT cambia sólo los campos enviados y DELETE borra si nada lo usa.
+def error_json(mensaje, codigo, campos=None):
+    cuerpo = {"error": mensaje}
+    if campos:
+        cuerpo["campos"] = campos
+    return jsonify(cuerpo), codigo
+
+
+def cuerpo_json():
+    cuerpo = request.get_json(silent=True)
+    return cuerpo if isinstance(cuerpo, dict) else None
+
+
+def confirmar(obj, nuevo, choque):
+    if nuevo:
+        db.session.add(obj)
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return False, error_json(choque, 409)
+    return True, None
+
+
+def eliminar_api(obj, datos, n, uno, varios):
+    if n:
+        return error_json(f"No se puede eliminar: aparece en {n} {uno if n == 1 else varios}", 409)
+    db.session.delete(obj)
+    ok, fallo = confirmar(obj, False, "No se puede eliminar: otros registros lo usan")
+    return jsonify({"eliminado": datos}) if ok else fallo
+
+
+CAMPOS_ESTUDIANTE = ("nombres", "apellidos", "fecha_nacimiento", "sexo", "zona", "estrato", "discapacidad",
+                     "id_grupo", "estado", "id_causa", "id_programa")
+
+
+def leer_estudiante_json(e, cuerpo):
+    # Traduce el JSON al formato del formulario para validar con las mismas reglas.
+    err = {k: "Campo desconocido" for k in cuerpo if k not in CAMPOS_ESTUDIANTE}
+    f = valores_de(e)
+    for k, v in cuerpo.items():
+        if k == "fecha_nacimiento":
+            f["dia"] = f["mes"] = f["anio"] = ""
+            if v:
+                try:
+                    fn = date.fromisoformat(str(v))
+                    f["dia"], f["mes"], f["anio"] = str(fn.day), str(fn.month), str(fn.year)
+                except ValueError:
+                    err[k] = "Use el formato AAAA-MM-DD"
+        elif k == "discapacidad":
+            f[k] = bool(v)
+        elif k in CAMPOS_ESTUDIANTE:
+            f[k] = "" if v is None else str(v)
+    if f.pop("discapacidad", False):
+        f["discapacidad"] = "on"
+    d, errores = leer_formulario(f)
+    if "fecha" in errores:
+        errores["fecha_nacimiento"] = errores.pop("fecha")
+    return d, {**err, **errores}
+
+
+def escribir_estudiante(e):
+    cuerpo = cuerpo_json()
+    if cuerpo is None:
+        return error_json("El cuerpo debe ser un objeto JSON", 400)
+    d, err = leer_estudiante_json(e, cuerpo)
+    if err:
+        return error_json("Datos no válidos", 422, err)
+    nuevo = e is None
+    e = e or Estudiante()
+    guardar_estudiante(e, d)
+    ok, fallo = confirmar(e, nuevo, "Ya tiene una matrícula en ese grupo")
+    return (jsonify(fila_estudiante(e)), 201 if nuevo else 200) if ok else fallo
+
+
+@app.post("/api/estudiantes")
+def api_crear_estudiante():
+    return escribir_estudiante(None)
+
+
+@app.put("/api/estudiantes/<int:id>")
+def api_editar_estudiante(id):
+    return escribir_estudiante(db.get_or_404(Estudiante, id))
+
+
+@app.delete("/api/estudiantes/<int:id>")
+def api_eliminar_estudiante(id):
+    e = db.get_or_404(Estudiante, id)
+    return eliminar_api(e, fila_estudiante(e), len(e.matriculas), "matrícula", "matrículas")
+
+
+# Catálogos: campo -> (tipo, largo máximo, obligatorio).
+CATALOGOS = {
+    "instituciones": {"modelo": Institucion, "json": json_institucion, "uso": ("grupos", "grupo", "grupos"),
+                      "campos": {"nombre": ("texto", 150, True), "tipo": ("texto", 20, False),
+                                 "municipio": ("texto", 100, False), "zona": ("zona", None, False)}},
+    "grupos": {"modelo": Grupo, "json": json_grupo, "uso": ("matriculas", "matrícula", "matrículas"),
+               "campos": {"grado": ("texto", 20, True), "jornada": ("texto", 30, False),
+                          "anio_lectivo": ("anio", None, True), "id_institucion": ("institucion", None, True)}},
+    "causas": {"modelo": CausaRetiro, "json": json_causa, "uso": ("matriculas", "matrícula", "matrículas"),
+               "campos": {"descripcion": ("texto", 255, True)}},
+    "programas": {"modelo": ProgramaApoyo, "json": json_programa, "uso": ("matriculas", "matrícula", "matrículas"),
+                  "campos": {"nombre": ("texto", 150, True), "tipo": ("texto", 30, False)}},
+}
+CATALOGO = "any(instituciones, grupos, causas, programas)"
+
+
+def leer_catalogo(campos, cuerpo, nuevo):
+    d = {}
+    err = {k: "Campo desconocido" for k in cuerpo if k not in campos}
+    for k, (tipo, largo, requerido) in campos.items():
+        if k not in cuerpo:
+            if nuevo and requerido:
+                err[k] = "Obligatorio"
+            continue
+        v = cuerpo[k].strip() if isinstance(cuerpo[k], str) else cuerpo[k]
+        n = None if isinstance(v, bool) else entero(v)
+        if v in (None, ""):
+            if requerido:
+                err[k] = "Obligatorio"
+            else:
+                d[k] = None
+        elif tipo == "texto":
+            if not isinstance(v, str):
+                err[k] = "Debe ser texto"
+            elif len(v) > largo:
+                err[k] = f"Máximo {largo} caracteres"
+            else:
+                d[k] = v
+        elif tipo == "zona":
+            if v in ZONAS:
+                d[k] = v
+            else:
+                err[k] = "Urbana o Rural"
+        elif tipo == "anio":
+            if n and 1990 <= n <= 2100:
+                d[k] = n
+            else:
+                err[k] = "Año entre 1990 y 2100"
+        elif tipo == "institucion":
+            if n and db.session.get(Institucion, n):
+                d[k] = n
+            else:
+                err[k] = "No existe esa institución"
+    return d, err
+
+
+def escribir_catalogo(ruta, obj):
+    c = CATALOGOS[ruta]
+    cuerpo = cuerpo_json()
+    if cuerpo is None:
+        return error_json("El cuerpo debe ser un objeto JSON", 400)
+    nuevo = obj is None
+    d, err = leer_catalogo(c["campos"], cuerpo, nuevo)
+    if err:
+        return error_json("Datos no válidos", 422, err)
+    obj = obj or c["modelo"]()
+    for k, v in d.items():
+        setattr(obj, k, v)
+    ok, fallo = confirmar(obj, nuevo, "Choca con un registro que ya existe")
+    return (jsonify(c["json"](obj)), 201 if nuevo else 200) if ok else fallo
+
+
+@app.get(f"/api/<{CATALOGO}:ruta>/<int:id>")
+def api_catalogo_uno(ruta, id):
+    c = CATALOGOS[ruta]
+    return jsonify(c["json"](db.get_or_404(c["modelo"], id)))
+
+
+@app.post(f"/api/<{CATALOGO}:ruta>")
+def api_catalogo_crear(ruta):
+    return escribir_catalogo(ruta, None)
+
+
+@app.put(f"/api/<{CATALOGO}:ruta>/<int:id>")
+def api_catalogo_editar(ruta, id):
+    return escribir_catalogo(ruta, db.get_or_404(CATALOGOS[ruta]["modelo"], id))
+
+
+@app.delete(f"/api/<{CATALOGO}:ruta>/<int:id>")
+def api_catalogo_eliminar(ruta, id):
+    c = CATALOGOS[ruta]
+    obj = db.get_or_404(c["modelo"], id)
+    relacion, uno, varios = c["uso"]
+    return eliminar_api(obj, c["json"](obj), len(getattr(obj, relacion)), uno, varios)
 
 
 # ---------- DOCUMENTACIÓN DE LA API ----------
+# Valores de ejemplo que se cambian por ids reales al pintar la página.
+UN_GRUPO, UNA_INSTITUCION = "<grupo>", "<institucion>"
+
 P_ZONA = {"nombre": "zona", "en": "query", "tipo": "zona", "desc": "Urbana o Rural. Si no se envía, trae las dos."}
 P_INST = {"nombre": "institucion", "en": "query", "tipo": "institucion", "desc": "id de la institución. Si no se envía, trae todas."}
 
-API = [
-    {"id": "estudiantes", "grupo": "Estudiantes", "ruta": "/api/estudiantes", "params": [P_ZONA, P_INST],
-     "resumen": "Lista de estudiantes con su matrícula más reciente",
-     "desc": "Un objeto por estudiante, ordenados por apellido. Los datos de matrícula salen en null si no tiene ninguna.",
-     "campos": [("id", "entero", "id_estudiante"), ("nombre", "texto", "Nombres y apellidos"),
+R_LISTA = [(200, "Lista JSON")]
+R_UNO = [(200, "El objeto"), (404, "No existe ese id")]
+R_CREAR = [(201, "Creado: devuelve el objeto nuevo con su id"), (400, "El cuerpo no es un objeto JSON"),
+           (422, "Datos no válidos: «campos» dice qué falló en cada uno"), (409, "Choca con un registro que ya existe")]
+R_EDITAR = [(200, "Guardado: devuelve el objeto actualizado"), (400, "El cuerpo no es un objeto JSON"),
+            (404, "No existe ese id"), (422, "Datos no válidos: «campos» dice qué falló en cada uno")]
+R_BORRAR = [(200, "Eliminado: devuelve lo que se borró"), (404, "No existe ese id"),
+            (409, "No se puede: otros registros lo usan")]
+
+
+def p_id(recurso, que):
+    return {"nombre": "id", "en": "path", "tipo": recurso, "desc": f"id {que}.", "requerido": True}
+
+
+def crud(recurso, grupo, que, campos, cuerpo, crear, editar, uso):
+    # Las cuatro consultas por id de un recurso: leer uno, crear, cambiar y borrar.
+    ruta, uno = f"/api/{recurso}", f"/api/{recurso}/{{id}}"
+    base = {"grupo": grupo, "recurso": recurso}
+    return [
+        {**base, "id": f"{recurso}-uno", "metodo": "GET", "ruta": uno, "params": [p_id(recurso, que)],
+         "resumen": f"Leer {que} por su id", "desc": f"Mismos campos que la lista. Si el id no existe responde 404.",
+         "campos": [("…", "", f"Igual que GET {ruta}")], "codigos": R_UNO},
+        {**base, "id": f"{recurso}-crear", "metodo": "POST", "ruta": ruta, "params": [], "cuerpo": cuerpo,
+         "ejemplo": crear, "resumen": f"Crear {que}",
+         "desc": "Envía el cuerpo en JSON. Los campos obligatorios deben ir; los demás pueden faltar o ser null.",
+         "campos": campos, "codigos": R_CREAR},
+        {**base, "id": f"{recurso}-editar", "metodo": "PUT", "ruta": uno, "params": [p_id(recurso, que)],
+         "cuerpo": cuerpo, "ejemplo": editar, "resumen": f"Cambiar {que}",
+         "desc": "Envía sólo los campos que quieres cambiar; los demás se quedan como están.",
+         "campos": campos, "codigos": R_EDITAR},
+        {**base, "id": f"{recurso}-borrar", "metodo": "DELETE", "ruta": uno, "params": [p_id(recurso, que)],
+         "resumen": f"Eliminar {que}",
+         "desc": f"Borra el registro. Si {uso}, responde 409 y no borra nada.",
+         "campos": [("eliminado", "objeto", "El registro tal como estaba")], "codigos": R_BORRAR},
+    ]
+
+
+C_ESTUDIANTE = [("id", "entero", "id_estudiante"), ("nombre", "texto", "Nombres y apellidos"),
                 ("sexo", "texto", "Femenino, Masculino o null"), ("zona", "texto", "Urbana, Rural o null"),
                 ("estrato", "entero", "0 a 6 o null"), ("discapacidad", "booleano", ""),
                 ("id_institucion · institucion", "entero · texto", "Institución de la matrícula"),
                 ("grado · jornada", "texto", "Grupo de la matrícula"),
                 ("estado", "texto", "ACTIVA, RETIRADO, GRADUADO o null"),
-                ("causa · programa", "texto", "Causa del retiro y programa de apoyo, o null")]},
-    {"id": "estudiante", "grupo": "Estudiantes", "ruta": "/api/estudiantes/{id}",
-     "params": [{"nombre": "id", "en": "path", "tipo": "estudiante", "desc": "id del estudiante.", "requerido": True}],
-     "resumen": "Un estudiante por su id",
-     "desc": "Mismos campos que la lista. Si el id no existe responde 404 con {\"error\": …}.",
-     "campos": [("…", "", "Igual que GET /api/estudiantes")]},
-    {"id": "zonas", "grupo": "Estudiantes", "ruta": "/api/zonas", "params": [P_INST],
+                ("causa · programa", "texto", "Causa del retiro y programa de apoyo, o null")]
+B_ESTUDIANTE = [("nombres", "texto", True, "Hasta 100 caracteres"), ("apellidos", "texto", True, "Hasta 100 caracteres"),
+                ("fecha_nacimiento", "texto", False, "AAAA-MM-DD, no futura"), ("sexo", "texto", False, "Femenino o Masculino"),
+                ("zona", "texto", False, "Urbana o Rural"), ("estrato", "entero", False, "0 a 6"),
+                ("discapacidad", "booleano", False, "true o false"),
+                ("id_grupo", "entero", False, "Grupo de la matrícula; ver GET /api/grupos"),
+                ("estado", "texto", False, "ACTIVA, RETIRADO o GRADUADO; obligatorio si hay id_grupo"),
+                ("id_causa", "entero", False, "Obligatorio si el estado es RETIRADO; ver GET /api/causas"),
+                ("id_programa", "entero", False, "Programa de apoyo; ver GET /api/programas")]
+C_INSTITUCION = [("id", "entero", "id_institucion"), ("nombre", "texto", ""), ("tipo", "texto", ""),
+                 ("municipio", "texto", ""), ("zona", "texto", "Urbana o Rural")]
+B_INSTITUCION = [("nombre", "texto", True, "Hasta 150 caracteres"), ("tipo", "texto", False, "Oficial, Privado… hasta 20"),
+                 ("municipio", "texto", False, "Hasta 100 caracteres"), ("zona", "texto", False, "Urbana o Rural")]
+C_GRUPO = [("id", "entero", "id_grupo"), ("grado · jornada", "texto", ""), ("anio_lectivo", "entero", ""),
+           ("id_institucion · institucion", "entero · texto", "")]
+B_GRUPO = [("grado", "texto", True, "Hasta 20 caracteres, p. ej. 7B"), ("jornada", "texto", False, "Mañana, Tarde, Única…"),
+           ("anio_lectivo", "entero", True, "1990 a 2100"), ("id_institucion", "entero", True, "Ver GET /api/instituciones")]
+C_CAUSA = [("id", "entero", "id_causa"), ("descripcion", "texto", "")]
+B_CAUSA = [("descripcion", "texto", True, "Hasta 255 caracteres")]
+C_PROGRAMA = [("id", "entero", "id_programa"), ("nombre", "texto", ""), ("tipo", "texto", "")]
+B_PROGRAMA = [("nombre", "texto", True, "Hasta 150 caracteres"), ("tipo", "texto", False, "Económico, Transporte… hasta 30")]
+
+API = [
+    {"id": "estudiantes", "grupo": "Estudiantes", "recurso": "estudiantes", "metodo": "GET", "ruta": "/api/estudiantes",
+     "params": [P_ZONA, P_INST], "resumen": "Lista de estudiantes con su matrícula más reciente",
+     "desc": "Un objeto por estudiante, ordenados por apellido. Los datos de matrícula salen en null si no tiene ninguna.",
+     "campos": C_ESTUDIANTE, "codigos": R_LISTA},
+    *crud("estudiantes", "Estudiantes", "un estudiante", C_ESTUDIANTE, B_ESTUDIANTE,
+          {"nombres": "Laura", "apellidos": "Gómez Ruiz", "fecha_nacimiento": "2012-03-14", "sexo": "Femenino",
+           "zona": "Rural", "estrato": 2, "discapacidad": False, "id_grupo": UN_GRUPO, "estado": "ACTIVA",
+           "id_causa": None, "id_programa": None},
+          {"zona": "Urbana", "estrato": 3}, "tiene matrículas"),
+    {"id": "zonas", "grupo": "Estudiantes", "metodo": "GET", "ruta": "/api/zonas", "params": [P_INST],
      "resumen": "Estudiantes por zona y estado de matrícula",
      "desc": "Cuenta a los estudiantes de cada zona según el estado de su matrícula más reciente.",
      "campos": [("zona", "texto", "Urbana, Rural o Sin dato"), ("total", "entero", "Estudiantes de la zona"),
-                ("estados", "objeto", "Estado → número de estudiantes")]},
-    {"id": "desercion", "grupo": "Deserción", "ruta": "/api/desercion", "params": [P_ZONA, P_INST],
+                ("estados", "objeto", "Estado → número de estudiantes")], "codigos": R_LISTA},
+    {"id": "desercion", "grupo": "Deserción", "metodo": "GET", "ruta": "/api/desercion", "params": [P_ZONA, P_INST],
      "resumen": "Reporte de deserción completo",
-     "desc": "Lo mismo que muestra la pantalla Deserción: totales, tasas por grupo, causas, programas y la lista de retirados.",
+     "desc": "Lo mismo que muestra la pantalla Deserción: totales, tasas por grupo, causas, programas y la lista de retirados. "
+             "Sólo se lee: cambia al crear, editar o borrar estudiantes.",
      "campos": [("totales", "objeto", "matriculas, activas, retirados y tasa (%)"),
                 ("por_institucion · por_zona · por_estrato", "lista", "nombre, matriculados, retirados y tasa (%)"),
                 ("por_causa · por_programa", "lista", "nombre y retirados"),
                 ("retirados", "lista", "Estudiantes retirados: institución, grado, fecha, causa y programa"),
-                ("hallazgos", "lista", "Frases que resumen el reporte")]},
-    {"id": "instituciones", "grupo": "Catálogos", "ruta": "/api/instituciones", "params": [],
-     "resumen": "Instituciones educativas", "desc": "Ordenadas por nombre.",
-     "campos": [("id", "entero", "id_institucion"), ("nombre", "texto", ""), ("tipo", "texto", ""),
-                ("municipio", "texto", ""), ("zona", "texto", "Urbana o Rural")]},
-    {"id": "grupos", "grupo": "Catálogos", "ruta": "/api/grupos", "params": [P_INST],
-     "resumen": "Grupos por institución y año", "desc": "Del año lectivo más reciente al más antiguo.",
-     "campos": [("id", "entero", "id_grupo"), ("grado · jornada", "texto", ""), ("anio_lectivo", "entero", ""),
-                ("id_institucion · institucion", "entero · texto", "")]},
-    {"id": "causas", "grupo": "Catálogos", "ruta": "/api/causas", "params": [],
-     "resumen": "Causas de retiro", "desc": "Las opciones que se eligen al marcar a un estudiante como retirado.",
-     "campos": [("id", "entero", "id_causa"), ("descripcion", "texto", "")]},
-    {"id": "programas", "grupo": "Catálogos", "ruta": "/api/programas", "params": [],
-     "resumen": "Programas de apoyo", "desc": "Programas que se pueden asignar a una matrícula.",
-     "campos": [("id", "entero", "id_programa"), ("nombre", "texto", ""), ("tipo", "texto", "")]},
+                ("hallazgos", "lista", "Frases que resumen el reporte")], "codigos": R_LISTA},
+    {"id": "instituciones", "grupo": "Instituciones", "recurso": "instituciones", "metodo": "GET",
+     "ruta": "/api/instituciones", "params": [], "resumen": "Lista de instituciones educativas",
+     "desc": "Ordenadas por nombre.", "campos": C_INSTITUCION, "codigos": R_LISTA},
+    *crud("instituciones", "Instituciones", "una institución", C_INSTITUCION, B_INSTITUCION,
+          {"nombre": "IE Los Almendros", "tipo": "Oficial", "municipio": "Santa Rosa", "zona": "Rural"},
+          {"municipio": "La Virginia"}, "tiene grupos"),
+    {"id": "grupos", "grupo": "Grupos", "recurso": "grupos", "metodo": "GET", "ruta": "/api/grupos", "params": [P_INST],
+     "resumen": "Lista de grupos por institución y año", "desc": "Del año lectivo más reciente al más antiguo.",
+     "campos": C_GRUPO, "codigos": R_LISTA},
+    *crud("grupos", "Grupos", "un grupo", C_GRUPO, B_GRUPO,
+          {"grado": "7B", "jornada": "Tarde", "anio_lectivo": 2026, "id_institucion": UNA_INSTITUCION},
+          {"jornada": "Mañana"}, "tiene matrículas"),
+    {"id": "causas", "grupo": "Causas de retiro", "recurso": "causas", "metodo": "GET", "ruta": "/api/causas",
+     "params": [], "resumen": "Lista de causas de retiro",
+     "desc": "Las opciones que se eligen al marcar a un estudiante como retirado.", "campos": C_CAUSA, "codigos": R_LISTA},
+    *crud("causas", "Causas de retiro", "una causa", C_CAUSA, B_CAUSA,
+          {"descripcion": "Distancia al colegio"}, {"descripcion": "Distancia entre la casa y el colegio"},
+          "alguna matrícula la usa"),
+    {"id": "programas", "grupo": "Programas de apoyo", "recurso": "programas", "metodo": "GET", "ruta": "/api/programas",
+     "params": [], "resumen": "Lista de programas de apoyo", "desc": "Programas que se pueden asignar a una matrícula.",
+     "campos": C_PROGRAMA, "codigos": R_LISTA},
+    *crud("programas", "Programas de apoyo", "un programa", C_PROGRAMA, B_PROGRAMA,
+          {"nombre": "Útiles escolares", "tipo": "Económico"}, {"tipo": "Material"}, "alguna matrícula lo usa"),
 ]
 
 
 @app.get("/api")
 def api_docs():
-    alumnos = Estudiante.query.order_by(Estudiante.apellidos, Estudiante.nombres).all()
+    grupos_bd = Grupo.query.join(Grupo.institucion).options(contains_eager(Grupo.institucion)) \
+        .order_by(Institucion.nombre, Grupo.anio_lectivo.desc(), Grupo.grado).all()
+    instituciones = Institucion.query.order_by(Institucion.nombre).all()
+    opciones = {
+        "estudiantes": [(e.id_estudiante, f"{e.nombres} {e.apellidos}")
+                        for e in Estudiante.query.order_by(Estudiante.apellidos, Estudiante.nombres)],
+        "instituciones": [(i.id_institucion, i.nombre) for i in instituciones],
+        "grupos": [(g.id_grupo, f"{g.grado} · {g.institucion.nombre} · {g.anio_lectivo}") for g in grupos_bd],
+        "causas": [(c.id_causa, c.descripcion) for c in CausaRetiro.query.order_by(CausaRetiro.descripcion)],
+        "programas": [(p.id_programa, p.nombre) for p in ProgramaApoyo.query.order_by(ProgramaApoyo.nombre)],
+    }
+    ids = {UN_GRUPO: grupos_bd[0].id_grupo if grupos_bd else None,
+           UNA_INSTITUCION: instituciones[0].id_institucion if instituciones else None}
+    api = [{**a, "ejemplo": {k: ids.get(v, v) if isinstance(v, str) else v for k, v in a["ejemplo"].items()}}
+           if "ejemplo" in a else a for a in API]
     grupos = {}
-    for a in API:
+    for a in api:
         grupos.setdefault(a["grupo"], []).append(a)
-    return render_template("api.html", api=API, grupos=grupos.items(), alumnos=alumnos,
-                           instituciones=Institucion.query.order_by(Institucion.nombre).all())
+    return render_template("api.html", api=api, grupos=grupos.items(), opciones=opciones)
 
 
 # ---------- ERRORES ----------
@@ -625,6 +910,13 @@ def sin_base(e):
 def no_existe(e):
     if request.path.startswith("/api/"):
         return jsonify({"error": "No existe ese recurso"}), 404
+    return e
+
+
+@app.errorhandler(405)
+def metodo_no_permitido(e):
+    if request.path.startswith("/api/"):
+        return jsonify({"error": f"{request.method} no se puede usar en esta ruta"}), 405
     return e
 
 

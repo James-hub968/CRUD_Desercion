@@ -6,31 +6,46 @@
 {% set cid = ruta_id ~ '-' ~ p.nombre %}
 <div class="campo">
   <label for="{{ cid }}">{{ p.nombre }}{% if not p.requerido %} <span class="tenue">· opcional</span>{% endif %}</label>
-  <select id="{{ cid }}" name="{{ p.nombre }}" class="control" data-en="{{ p.en }}" {% if p.requerido %}required{% endif %}>
+  <select id="{{ cid }}" name="{{ p.nombre }}" class="control" data-en="{{ p.en }}" {% if p.en == 'path' %}data-recurso="{{ p.tipo }}"{% endif %} {% if p.requerido %}required{% endif %}>
     {% if p.tipo == 'zona' %}
     <option value="">Todas</option>
     {% for z in ZONAS %}<option>{{ z }}</option>{% endfor %}
     {% elif p.tipo == 'institucion' %}
     <option value="">Todas</option>
-    {% for i in instituciones %}<option value="{{ i.id_institucion }}">{{ i.id_institucion }} · {{ i.nombre }}</option>{% endfor %}
-    {% elif p.tipo == 'estudiante' %}
-    {% for a in alumnos %}<option value="{{ a.id_estudiante }}">{{ a.id_estudiante }} · {{ a.nombres }} {{ a.apellidos }}</option>{% endfor %}
+    {% for id, texto in opciones.instituciones %}<option value="{{ id }}">{{ id }} · {{ texto }}</option>{% endfor %}
+    {% else %}
+    {% for id, texto in opciones[p.tipo] %}<option value="{{ id }}">{{ id }} · {{ texto }}</option>{% endfor %}
     <option value="0">0 · id que no existe</option>
     {% endif %}
   </select>
 </div>
 {% endmacro %}
 
+{% macro tabla(titulo, cabeza, filas, nota='') %}
+<h3>{{ titulo }}{% if nota %} <span class="tenue">· {{ nota }}</span>{% endif %}</h3>
+<table class="tabla api-tabla">
+  <thead><tr>{% for c in cabeza %}<th scope="col">{{ c }}</th>{% endfor %}</tr></thead>
+  <tbody>{{ caller() }}</tbody>
+</table>
+{% endmacro %}
+
 {% block contenido %}
 <div class="encabezado">
   <h1>API</h1>
-  <p class="sub"><strong class="cifra">{{ api|length }}</strong> consultas GET · responden JSON · sin clave</p>
+  <p class="sub"><strong class="cifra">{{ api|length }}</strong> consultas · responden JSON · sin clave</p>
 </div>
 
 <section class="tarjeta api-base">
   <div>
     <h2>Dirección base</h2>
-    <p class="tenue">Cada consulta se arma con esta dirección más su ruta. Abre una, elige los filtros y pulsa Ejecutar para ver la respuesta con los datos actuales.</p>
+    <p class="tenue">Cada consulta se arma con esta dirección más su ruta. Abre una, ajusta los datos y pulsa Ejecutar para ver la respuesta.</p>
+    <ul class="api-leyenda">
+      <li><span class="api__metodo" data-metodo="GET">GET</span> lee</li>
+      <li><span class="api__metodo" data-metodo="POST">POST</span> crea</li>
+      <li><span class="api__metodo" data-metodo="PUT">PUT</span> cambia</li>
+      <li><span class="api__metodo" data-metodo="DELETE">DELETE</span> borra</li>
+    </ul>
+    <p class="api-aviso">POST, PUT y DELETE cambian los datos reales de la base.</p>
   </div>
   <div class="api-copia">
     <code data-base>{{ request.host_url.rstrip('/') }}</code>
@@ -38,13 +53,17 @@
   </div>
 </section>
 
+<nav class="api-indice" aria-label="Recursos de la API">
+  {% for grupo, puntos in grupos %}<a href="#g-{{ loop.index }}">{{ grupo }} <span class="tenue">{{ puntos|length }}</span></a>{% endfor %}
+</nav>
+
 {% for grupo, puntos in grupos %}
 <section class="api-grupo" aria-labelledby="g-{{ loop.index }}">
   <h2 id="g-{{ loop.index }}" class="api-grupo__titulo">{{ grupo }} <span class="tenue">· {{ puntos|length }}</span></h2>
   {% for a in puntos %}
   <details class="tarjeta api" id="{{ a.id }}">
     <summary>
-      <span class="api__metodo">GET</span>
+      <span class="api__metodo" data-metodo="{{ a.metodo }}">{{ a.metodo }}</span>
       <code class="api__ruta">{{ a.ruta }}</code>
       <span class="api__resumen">{{ a.resumen }}</span>
       <span class="api__signo" aria-hidden="true"></span>
@@ -54,48 +73,68 @@
       <p>{{ a.desc }}</p>
 
       <div class="api__col">
-        <h3>Parámetros</h3>
         {% if a.params %}
-        <table class="tabla api-tabla">
-          <thead><tr><th scope="col">Nombre</th><th scope="col">En</th><th scope="col">Descripción</th></tr></thead>
-          <tbody>
-            {% for p in a.params %}
-            <tr class="{{ loop.cycle('', 'alt') }}">
-              <td data-label="Nombre"><code>{{ p.nombre }}</code>{% if p.requerido %} <span class="api__req">obligatorio</span>{% endif %}</td>
-              <td data-label="En">{{ 'ruta' if p.en == 'path' else 'consulta' }}</td>
-              <td class="largo" data-label="Descripción">{{ p.desc }}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-        {% else %}
+        {% call tabla('Parámetros', ['Nombre', 'En', 'Descripción'], a.params) %}
+          {% for p in a.params %}
+          <tr class="{{ loop.cycle('', 'alt') }}">
+            <td data-label="Nombre"><code>{{ p.nombre }}</code>{% if p.requerido %} <span class="api__req">obligatorio</span>{% endif %}</td>
+            <td data-label="En">{{ 'ruta' if p.en == 'path' else 'consulta' }}</td>
+            <td class="largo" data-label="Descripción">{{ p.desc }}</td>
+          </tr>
+          {% endfor %}
+        {% endcall %}
+        {% endif %}
+        {% if a.cuerpo %}
+        {% call tabla('Cuerpo', ['Campo', 'Tipo', 'Descripción'], a.cuerpo, 'application/json') %}
+          {% for nombre, tipo, req, desc in a.cuerpo %}
+          <tr class="{{ loop.cycle('', 'alt') }}">
+            <td data-label="Campo"><code>{{ nombre }}</code>{% if req and a.metodo == 'POST' %} <span class="api__req">obligatorio</span>{% endif %}</td>
+            <td data-label="Tipo">{{ tipo }}</td>
+            <td class="largo" data-label="Descripción">{{ desc }}</td>
+          </tr>
+          {% endfor %}
+        {% endcall %}
+        {% endif %}
+        {% if not a.params and not a.cuerpo %}
+        <h3>Parámetros</h3>
         <p class="tenue">No recibe parámetros.</p>
         {% endif %}
       </div>
 
       <div class="api__col">
-        <h3>Respuesta <span class="tenue">· 200 · application/json</span></h3>
-        <table class="tabla api-tabla">
-          <thead><tr><th scope="col">Campo</th><th scope="col">Tipo</th><th scope="col">Detalle</th></tr></thead>
-          <tbody>
-            {% for nombre, tipo, detalle in a.campos %}
-            <tr class="{{ loop.cycle('', 'alt') }}"><td data-label="Campo"><code>{{ nombre }}</code></td><td data-label="Tipo">{{ tipo }}</td><td class="largo" data-label="Detalle">{{ detalle or '—' }}</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
+        {% call tabla('Respuesta', ['Campo', 'Tipo', 'Detalle'], a.campos, 'application/json') %}
+          {% for nombre, tipo, detalle in a.campos %}
+          <tr class="{{ loop.cycle('', 'alt') }}"><td data-label="Campo"><code>{{ nombre }}</code></td><td data-label="Tipo">{{ tipo }}</td><td class="largo" data-label="Detalle">{{ detalle or '—' }}</td></tr>
+          {% endfor %}
+        {% endcall %}
+        {% call tabla('Códigos', ['Código', 'Cuándo'], a.codigos) %}
+          {% for codigo, cuando in a.codigos %}
+          <tr class="{{ loop.cycle('', 'alt') }}"><td data-label="Código"><span class="api__codigo" data-ok="{{ 'true' if codigo < 400 else 'false' }}">{{ codigo }}</span></td><td class="largo" data-label="Cuándo">{{ cuando }}</td></tr>
+          {% endfor %}
+        {% endcall %}
       </div>
 
-      <form class="api__probar" data-api="{{ a.ruta }}">
+      <form class="api__probar" data-api="{{ a.ruta }}" data-metodo="{{ a.metodo }}" {% if a.recurso %}data-recurso="{{ a.recurso }}"{% endif %}>
         <h3>Probar</h3>
         {% if a.params %}
         <div class="fila-campos">
           {% for p in a.params %}{{ control(p, a.id) }}{% endfor %}
         </div>
         {% endif %}
+        {% if a.ejemplo %}
+        <div class="campo">
+          <label for="{{ a.id }}-cuerpo">Cuerpo <span class="tenue">· JSON</span></label>
+          <textarea id="{{ a.id }}-cuerpo" class="control api__editor" data-cuerpo spellcheck="false" autocomplete="off" rows="{{ a.ejemplo|length + 2 }}">{{ a.ejemplo|tojson(indent=2) }}</textarea>
+        </div>
+        {% endif %}
         <div class="api-copia">
           <code data-url>{{ a.ruta }}</code>
-          <button type="button" class="btn btn--icono" aria-label="Copiar consulta" data-tip="Copiar" data-copiar-url>{{ icono('copiar') }}</button>
+          <button type="button" class="btn btn--icono" aria-label="{{ 'Copiar consulta' if a.metodo == 'GET' else 'Copiar como curl' }}" data-tip="{{ 'Copiar' if a.metodo == 'GET' else 'Copiar curl' }}" data-copiar-url>{{ icono('copiar') }}</button>
+          {% if a.metodo == 'DELETE' %}
+          <button class="btn btn--peligro-lleno" data-texto="Eliminando…" data-armar="Pulsa otra vez">{{ icono('eliminar') }}Eliminar</button>
+          {% else %}
           <button class="btn btn--primario" data-texto="Consultando…">{{ icono('ejecutar') }}Ejecutar</button>
+          {% endif %}
         </div>
       </form>
 

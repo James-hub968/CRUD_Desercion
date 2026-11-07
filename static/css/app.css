@@ -315,16 +315,10 @@ code, pre { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; fon
 .api summary::-webkit-details-marker { display: none; }
 .api summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .api[open] summary { border-radius: var(--r-tarjeta) var(--r-tarjeta) 0 0; }
-.api__metodo { min-width: 3.75rem; padding: .125rem .5rem; border-radius: 6px; text-align: center; font-size: .78rem; font-weight: 600; letter-spacing: .02em; background: color-mix(in srgb, var(--accent) 12%, var(--surface)); color: var(--accent); }
-.api__metodo[data-metodo="POST"] { background: color-mix(in srgb, #b8860b 16%, var(--surface)); color: #8a5a00; }
-.api__metodo[data-metodo="PUT"] { background: var(--surface-3); color: var(--text); }
-.api__metodo[data-metodo="DELETE"] { background: color-mix(in srgb, var(--danger) 10%, var(--surface)); color: var(--danger); }
-.api-leyenda { display: flex; flex-wrap: wrap; gap: .5rem 1rem; margin: .75rem 0 0; padding: 0; list-style: none; font-size: .9rem; color: var(--text-2); }
-.api-leyenda li { display: flex; align-items: center; gap: .375rem; }
-.api-base .api-aviso { margin-top: .5rem; font-size: .9rem; color: var(--danger); }
-.api-indice { display: flex; flex-wrap: wrap; gap: .5rem; }
-.api-indice a { padding: .375rem .75rem; border-radius: 999px; background: var(--surface); box-shadow: var(--sombra); color: var(--text); font-size: .9rem; text-decoration: none; transition: background-color 150ms ease-out; }
-.api-indice a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.api__metodo { min-width: 3.75rem; padding: .125rem .5rem; border-radius: 6px; text-align: center; font-size: .78rem; font-weight: 600; letter-spacing: .02em; background: #d3f0d8; color: #1b5e2b; }
+.api__metodo[data-metodo="POST"] { background: #1b5e3a; color: #fff; }
+.api__metodo[data-metodo="PUT"] { background: #f5d04a; color: #3d3000; }
+.api__metodo[data-metodo="DELETE"] { background: #b3261e; color: #fff; }
 .api-grupo__titulo { scroll-margin-top: 4.5rem; }
 .api__col > h3 ~ h3 { margin-top: 1rem; }
 .api__editor { height: auto; min-height: 6rem; padding: .625rem .75rem; resize: vertical; font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: .86rem; line-height: 1.5; tab-size: 2; }
@@ -359,7 +353,6 @@ code, pre { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; fon
 .j-lit { color: #a3381f; }
 @media (hover: hover) {
   .api summary:hover { background: var(--surface-2); }
-  .api-indice a:hover { background: var(--surface-2); }
 }
 @media (max-width: 640px) {
   .api summary { grid-template-columns: auto minmax(0, 1fr) auto; }

@@ -29,10 +29,16 @@ ESTADOS = ("ACTIVA", "RETIRADO", "GRADUADO")
 ESTADO_TEXTO = {"ACTIVA": "Activa", "RETIRADO": "Retirado", "GRADUADO": "Graduado", None: "Sin matrícula"}
 
 
+def estatico(archivo):
+    # La fecha del archivo en la URL obliga al navegador a bajar la versión nueva
+    v = int(os.path.getmtime(os.path.join(app.static_folder, archivo)))
+    return url_for("static", filename=archivo, v=v)
+
+
 @app.context_processor
 def catalogos():
     return {"SEXOS": SEXOS, "ZONAS": ZONAS, "ESTRATOS": ESTRATOS,
-            "ESTADOS": ESTADOS, "ESTADO_TEXTO": ESTADO_TEXTO}
+            "ESTADOS": ESTADOS, "ESTADO_TEXTO": ESTADO_TEXTO, "estatico": estatico}
 
 
 @app.template_filter("pct")

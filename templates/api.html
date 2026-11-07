@@ -32,20 +32,12 @@
 {% block contenido %}
 <div class="encabezado">
   <h1>API</h1>
-  <p class="sub"><strong class="cifra">{{ api|length }}</strong> consultas · responden JSON · sin clave</p>
 </div>
 
 <section class="tarjeta api-base">
   <div>
     <h2>Dirección base</h2>
-    <p class="tenue">Cada consulta se arma con esta dirección más su ruta. Abre una, ajusta los datos y pulsa Ejecutar para ver la respuesta.</p>
-    <ul class="api-leyenda">
-      <li><span class="api__metodo" data-metodo="GET">GET</span> lee</li>
-      <li><span class="api__metodo" data-metodo="POST">POST</span> crea</li>
-      <li><span class="api__metodo" data-metodo="PUT">PUT</span> cambia</li>
-      <li><span class="api__metodo" data-metodo="DELETE">DELETE</span> borra</li>
-    </ul>
-    <p class="api-aviso">POST, PUT y DELETE cambian los datos reales de la base.</p>
+    <p class="tenue">Cada consulta se arma con esta dirección más su ruta. Abre una, ajusta los datos y pulsa Ejecutar.</p>
   </div>
   <div class="api-copia">
     <code data-base>{{ request.host_url.rstrip('/') }}</code>
@@ -53,13 +45,9 @@
   </div>
 </section>
 
-<nav class="api-indice" aria-label="Recursos de la API">
-  {% for grupo, puntos in grupos %}<a href="#g-{{ loop.index }}">{{ grupo }} <span class="tenue">{{ puntos|length }}</span></a>{% endfor %}
-</nav>
-
 {% for grupo, puntos in grupos %}
 <section class="api-grupo" aria-labelledby="g-{{ loop.index }}">
-  <h2 id="g-{{ loop.index }}" class="api-grupo__titulo">{{ grupo }} <span class="tenue">· {{ puntos|length }}</span></h2>
+  <h2 id="g-{{ loop.index }}" class="api-grupo__titulo">{{ grupo }}</h2>
   {% for a in puntos %}
   <details class="tarjeta api" id="{{ a.id }}">
     <summary>

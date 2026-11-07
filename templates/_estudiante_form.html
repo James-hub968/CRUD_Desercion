@@ -1,0 +1,124 @@
+{% from "_ui.html" import error, aria, opcion_seg with context %}
+{% if errores %}
+<p class="aviso-form" role="alert">Revise {{ errores|length }} {{ 'campo' if errores|length == 1 else 'campos' }} marcados abajo.</p>
+{% endif %}
+
+<form class="tarjeta formulario" method="post" action="{{ url_for('editar', id=e.id_estudiante) if e else url_for('crear') }}" novalidate data-guardar>
+  <section class="seccion">
+    <h2>Datos personales</h2>
+    <div class="fila-campos">
+      <div class="campo">
+        <label for="nombres">Nombres</label>
+        <input id="nombres" name="nombres" class="control" value="{{ v.nombres or '' }}" maxlength="100" autocomplete="given-name" required {{ aria('nombres') }}>
+        {{ error(errores, 'nombres') }}
+      </div>
+      <div class="campo">
+        <label for="apellidos">Apellidos</label>
+        <input id="apellidos" name="apellidos" class="control" value="{{ v.apellidos or '' }}" maxlength="100" autocomplete="family-name" required {{ aria('apellidos') }}>
+        {{ error(errores, 'apellidos') }}
+      </div>
+    </div>
+
+    <fieldset class="campo">
+      <legend>Fecha de nacimiento <span class="tenue">· opcional</span></legend>
+      <div class="fecha">
+        <label><span>Día</span><input name="dia" class="control" inputmode="numeric" maxlength="2" placeholder="DD" autocomplete="bday-day" value="{{ v.dia or '' }}" data-salta {{ aria('fecha') }}></label>
+        <label><span>Mes</span><input name="mes" class="control" inputmode="numeric" maxlength="2" placeholder="MM" autocomplete="bday-month" value="{{ v.mes or '' }}" data-salta {{ aria('fecha') }}></label>
+        <label class="fecha__anio"><span>Año</span><input name="anio" class="control" inputmode="numeric" maxlength="4" placeholder="AAAA" autocomplete="bday-year" value="{{ v.anio or '' }}" {{ aria('fecha') }}></label>
+      </div>
+      {{ error(errores, 'fecha') }}
+    </fieldset>
+
+    <fieldset class="campo">
+      <legend>Sexo</legend>
+      <div class="segmentos segmentos--radio">
+        {% for s in SEXOS %}{{ opcion_seg('sexo', s, s, v.sexo) }}{% endfor %}
+        {{ opcion_seg('sexo', '', 'Sin dato', v.sexo) }}
+      </div>
+      {{ error(errores, 'sexo') }}
+    </fieldset>
+  </section>
+
+  <section class="seccion">
+    <h2>Contexto</h2>
+    <fieldset class="campo">
+      <legend>Zona</legend>
+      <div class="segmentos segmentos--radio">
+        {% for z in ZONAS %}{{ opcion_seg('zona', z, z, v.zona) }}{% endfor %}
+        {{ opcion_seg('zona', '', 'Sin dato', v.zona) }}
+      </div>
+      {{ error(errores, 'zona') }}
+    </fieldset>
+
+    <fieldset class="campo">
+      <legend>Estrato</legend>
+      <div class="segmentos segmentos--radio">
+        {% for n in ESTRATOS %}{{ opcion_seg('estrato', n|string, n, v.estrato) }}{% endfor %}
+        {{ opcion_seg('estrato', '', 'Sin dato', v.estrato) }}
+      </div>
+      {{ error(errores, 'estrato') }}
+    </fieldset>
+
+    <label class="interruptor">
+      <input type="checkbox" name="discapacidad" role="switch" {% if v.discapacidad %}checked{% endif %}>
+      <span class="interruptor__pista" aria-hidden="true"></span>
+      <span>Tiene alguna discapacidad</span>
+    </label>
+  </section>
+
+  <section class="seccion">
+    <h2>Matrícula</h2>
+    <div class="campo">
+      <label for="id_grupo">Institución y grupo</label>
+      <select id="id_grupo" name="id_grupo" class="control" {{ aria('id_grupo') }}>
+        <option value="">Sin matrícula</option>
+        {% for nombre, lista in grupos|groupby('institucion.nombre') %}
+        <optgroup label="{{ nombre }}">
+          {% for g in lista %}
+          <option value="{{ g.id_grupo }}" {% if v.id_grupo == g.id_grupo|string %}selected{% endif %}>{{ g.grado }}{% if g.jornada %} · {{ g.jornada }}{% endif %} · {{ g.anio_lectivo }}</option>
+          {% endfor %}
+        </optgroup>
+        {% endfor %}
+      </select>
+      {{ error(errores, 'id_grupo') }}
+    </div>
+
+    <div data-requiere-grupo>
+      <fieldset class="campo">
+        <legend>Estado</legend>
+        <div class="segmentos segmentos--radio">
+          {% for s in ESTADOS %}{{ opcion_seg('estado', s, ESTADO_TEXTO[s], v.estado) }}{% endfor %}
+        </div>
+        {{ error(errores, 'estado') }}
+      </fieldset>
+
+      <div class="fila-campos">
+        <div class="campo" data-solo-retirado>
+          <label for="id_causa">Causa del retiro</label>
+          <select id="id_causa" name="id_causa" class="control" {{ aria('id_causa') }}>
+            <option value="">Elija una causa</option>
+            {% for c in causas %}
+            <option value="{{ c.id_causa }}" {% if v.id_causa == c.id_causa|string %}selected{% endif %}>{{ c.descripcion }}</option>
+            {% endfor %}
+          </select>
+          {{ error(errores, 'id_causa') }}
+        </div>
+        <div class="campo">
+          <label for="id_programa">Programa de apoyo <span class="tenue">· opcional</span></label>
+          <select id="id_programa" name="id_programa" class="control" {{ aria('id_programa') }}>
+            <option value="">Ninguno</option>
+            {% for p in programas %}
+            <option value="{{ p.id_programa }}" {% if v.id_programa == p.id_programa|string %}selected{% endif %}>{{ p.nombre }}</option>
+            {% endfor %}
+          </select>
+          {{ error(errores, 'id_programa') }}
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="formulario__botones">
+    <a class="btn btn--fantasma" href="{{ url_for('listar') }}" data-cerrar>Cancelar</a>
+    <button class="btn btn--primario" data-texto="Guardando…">{{ 'Guardar cambios' if e else 'Guardar estudiante' }}</button>
+  </div>
+</form>

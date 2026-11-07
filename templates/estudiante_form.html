@@ -1,15 +1,11 @@
 {% extends "base.html" %}
+{% block titulo %}{{ 'Editar estudiante' if e else 'Nuevo estudiante' }}{% endblock %}
+
 {% block contenido %}
-<h1>{{ 'Editar' if e else 'Nuevo' }} estudiante</h1>
-<form method="post">
-  <p>Nombres: <input name="nombres" value="{{ e.nombres if e else '' }}" required></p>
-  <p>Apellidos: <input name="apellidos" value="{{ e.apellidos if e else '' }}" required></p>
-  <p>Fecha de nacimiento: <input type="date" name="fecha_nacimiento" value="{{ e.fecha_nacimiento if e and e.fecha_nacimiento else '' }}"></p>
-  <p>Sexo: <input name="sexo" value="{{ e.sexo or '' if e else '' }}"></p>
-  <p>Zona: <input name="zona" value="{{ e.zona or '' if e else '' }}"></p>
-  <p>Estrato: <input type="number" name="estrato" min="0" max="6" value="{{ e.estrato or '' if e else '' }}"></p>
-  <p><label><input type="checkbox" name="discapacidad" {{ 'checked' if e and e.discapacidad }}> Discapacidad</label></p>
-  <button>Guardar</button>
-  <a href="{{ url_for('listar') }}">Cancelar</a>
-</form>
+<div class="encabezado">
+  <h1>{{ 'Editar estudiante' if e else 'Nuevo estudiante' }}</h1>
+  {% if e %}<p class="sub">{{ e.nombres }} {{ e.apellidos }}</p>{% endif %}
+</div>
+
+{% include "_estudiante_form.html" %}
 {% endblock %}

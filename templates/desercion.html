@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% from "_ui.html" import icono, vacio, filtros, barras with context %}
+{% block titulo %}Deserción{% endblock %}
+
+{% block acciones %}
+<a class="btn btn--fantasma" href="{{ url_for('reporte', zona=zona, institucion=inst.id_institucion if inst else none) }}" download>{{ icono('descargar') }}Excel</a>
+<button type="button" class="btn btn--primario" data-imprimir>{{ icono('imprimir') }}Imprimir</button>
+{% endblock %}
+
+{% block contenido %}
+{% set t = d.totales %}
+<div class="encabezado">
+  <p class="sub">
+    Reporte del {{ hoy.strftime('%d/%m/%Y') }}
+    · {{ ('zona ' ~ zona|lower) if zona else 'todas las zonas' }}
+    · {{ inst.nombre if inst else 'todas las instituciones' }}
+  </p>
+</div>
+
+{{ filtros('ver_desercion', zona, inst, instituciones) }}
+
+<section class="cifras" aria-label="Resumen">
+  <div class="cifra-tarjeta"><span class="cifra-tarjeta__valor">{{ t.matriculas }}</span><span class="cifra-tarjeta__nombre">Matrículas</span></div>
+  <div class="cifra-tarjeta"><span class="cifra-tarjeta__valor">{{ t.activas }}</span><span class="cifra-tarjeta__nombre">Activas</span></div>
+  <div class="cifra-tarjeta"><span class="cifra-tarjeta__valor">{{ t.retirados }}</span><span class="cifra-tarjeta__nombre">Retirados</span></div>
+  <div class="cifra-tarjeta cifra-tarjeta--destacada"><span class="cifra-tarjeta__valor">{{ t.tasa|pct }}</span><span class="cifra-tarjeta__nombre">Tasa de deserción</span></div>
+</section>
+
+<section class="tarjeta">
+  <h2>Hallazgos</h2>
+  <ul class="hallazgos">
+    {% for h in hallazgos %}<li>{{ h }}</li>{% endfor %}
+  </ul>
+</section>
+
+<section class="graficos">
+  {% for titulo, items in graficos %}
+  <div class="tarjeta{{ ' grafico--apoyo' if 'programa' in titulo|lower }}">{{ barras(titulo, items) }}</div>
+  {% endfor %}
+</section>
+
+<section class="tarjeta tarjeta--tabla">
+  <h2 class="tarjeta__titulo">Estudiantes retirados <span class="tenue">· {{ d.retirados|length }}</span></h2>
+  {% if d.retirados %}
+  <table class="tabla">
+    <thead>
+      <tr>
+        <th scope="col">Estudiante</th>
+        <th scope="col">Institución</th>
+        <th scope="col">Grado</th>
+        <th scope="col">Zona</th>
+        <th scope="col" class="num">Estrato</th>
+        <th scope="col">Causa</th>
+        <th scope="col">Programa de apoyo</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in d.retirados %}
+      <tr class="{{ loop.cycle('', 'alt') }}">
+        <td data-label="Estudiante"><a class="enlace-fila" href="{{ url_for('editar', id=r.id) }}">{{ r.nombre }}</a></td>
+        <td data-label="Institución">{{ r.institucion }}</td>
+        <td data-label="Grado">{{ r.grado }}</td>
+        <td data-label="Zona">{{ vacio(r.zona) }}</td>
+        <td data-label="Estrato" class="num">{{ vacio(r.estrato) }}</td>
+        <td class="largo" data-label="Causa">{{ vacio(r.causa) }}</td>
+        <td class="largo" data-label="Programa">{{ r.programa or 'Ninguno' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="vacio">No hay estudiantes retirados con estos filtros.</p>
+  {% endif %}
+</section>
+{% endblock %}
